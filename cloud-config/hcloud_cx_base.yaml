@@ -1,33 +1,17 @@
 #cloud-config
-############################
-# 1. Benutzer + SSH-Zugang #
-############################
 users:
   - name: silas
     groups: users, sudo
     sudo: ALL=(ALL) NOPASSWD:ALL
     shell: /bin/bash
     ssh_authorized_keys:
-      # Lädt automatisch alle Public Keys deines GitHub-Accounts
-      - "https://github.com/silas.keys"
+      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAID54S0nQ19Du0v83aqhBMBhGVJ+unqdJCLtiv+oUvt/N silas@automatework.de"
 
-# ===== Paketbasis =====
 package_update: true
 package_upgrade: true
-packages:
-  - fail2ban
-  - ufw
-  - curl
-  - gnupg
-  - ca-certificates
-  - lsb-release
-  - apt-transport-https
+packages: [fail2ban, ufw, curl, gnupg, ca-certificates, lsb-release, apt-transport-https]
 
-############################
-# 2. Dateien vorschreiben  #
-############################
 write_files:
-  # Caddyfile für Auto-TLS & Reverse-Proxy
   - path: /etc/caddy/Caddyfile
     permissions: "0644"
     owner: root:root
@@ -38,48 +22,26 @@ write_files:
         tls silas@automatework.de
       }
 
-########################################
-# 3. Kommandos nach der Paketin­stall. #
-########################################
 runcmd:
-  ## 3.1 SSH-Hardening (Port 22 bleibt, Root & PW-Login aus) ##
-  - sed -i -e '/^\(#\| \)PermitRootLogin/s/^.*$/PermitRootLogin no/' /etc/ssh/sshd_config
-  - sed -i -e '/^\(#\| \)PasswordAuthentication/s/^.*$/PasswordAuthentication no/' /etc/ssh/sshd_config
-  - sed -i -e '/^\(#\| \)KbdInteractiveAuthentication/s/^.*$/KbdInteractiveAuthentication no/' /etc/ssh/sshd_config
-  - sed -i -e '/^\(#\| \)ChallengeResponseAuthentication/s/^.*$/ChallengeResponseAuthentication no/' /etc/ssh/sshd_config
-  - sed -i -e '/^\(#\| \)MaxAuthTries/s/^.*$/MaxAuthTries 3/' /etc/ssh/sshd_config
+  - sed -i -e '/^#\?PermitRootLogin/s/.*/PermitRootLogin no/' /etc/ssh/sshd_config
+  - sed -i -e '/^#\?PasswordAuthentication/s/.*/PasswordAuthentication no/' /etc/ssh/sshd_config
   - systemctl restart ssh
-
-  ## 3.2 UFW-Firewall (nur SSH/HTTP/HTTPS offen) ##
   - ufw default deny incoming
   - ufw default allow outgoing
   - ufw allow OpenSSH
   - ufw allow 80
   - ufw allow 443
   - ufw --force enable
-
-  ## 3.3 Fail2Ban aktivieren ##
   - printf "[sshd]\nenabled = true\nbanaction = iptables-multiport\nmaxretry = 3\n" > /etc/fail2ban/jail.local
   - systemctl enable --now fail2ban
-
-  ## 3.4 Docker CE + Compose-Plugin installieren ##
   - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-  - echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] \
-      https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" \
-      > /etc/apt/sources.list.d/docker.list
+  - echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list
   - apt-get update
   - apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
   - usermod -aG docker silas
-
-  ## 3.5 Caddy 2 (Stable Repo) ##
-  - curl -fsSL 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor \
-      -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-  - echo "deb [signed-by=/usr/share/keyrings/caddy-stable-archive-keyring.gpg] \
-      https://dl.cloudsmith.io/public/caddy/stable/deb/any-version any-version main" \
-      > /etc/apt/sources.list.d/caddy-stable.list
+  - curl -fsSL 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+  - echo "deb [signed-by=/usr/share/keyrings/caddy-stable-archive-keyring.gpg] https://dl.cloudsmith.io/public/caddy/stable/deb/any-version any-version main" > /etc/apt/sources.list.d/caddy-stable.list
   - apt-get update
   - apt-get install -y caddy
   - systemctl reload caddy
-
-  ## 3.6 Reboot, damit alles (Kernel-Updates, Gruppen, Fire­wall) greift ##
   - reboot
