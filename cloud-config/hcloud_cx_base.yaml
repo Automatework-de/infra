@@ -1,26 +1,16 @@
 #cloud-config
 users:
   - name: silas
-    groups: users, sudo
+    groups: users, sudo, docker
     sudo: ALL=(ALL) NOPASSWD:ALL
     shell: /bin/bash
     ssh_authorized_keys:
-      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAID54S0nQ19Du0v83aqhBMBhGVJ+unqdJCLtiv+oUvt/N silas@automatework.de"
+      - "ssh-ed25519 AAAA... silas@automatework.de"
 
 package_update: true
 package_upgrade: true
-packages: [fail2ban, ufw, curl, gnupg, ca-certificates, lsb-release, apt-transport-https]
-
-write_files:
-  - path: /etc/caddy/Caddyfile
-    permissions: "0644"
-    owner: root:root
-    content: |
-      backend.automatework.de {
-        encode gzip
-        reverse_proxy unix//var/run/docker.sock
-        tls silas@automatework.de
-      }
+packages:
+  [fail2ban, ufw, curl, gnupg, ca-certificates, lsb-release, apt-transport-https]
 
 runcmd:
   - sed -i -e '/^#\?PermitRootLogin/s/.*/PermitRootLogin no/' /etc/ssh/sshd_config
@@ -38,10 +28,3 @@ runcmd:
   - echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list
   - apt-get update
   - apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-  - usermod -aG docker silas
-  - curl -fsSL 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-  - echo "deb [signed-by=/usr/share/keyrings/caddy-stable-archive-keyring.gpg] https://dl.cloudsmith.io/public/caddy/stable/deb/any-version any-version main" > /etc/apt/sources.list.d/caddy-stable.list
-  - apt-get update
-  - apt-get install -y caddy
-  - systemctl reload caddy
-  - reboot
