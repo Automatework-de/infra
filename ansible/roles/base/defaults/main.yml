@@ -1,0 +1,4 @@
+deploy_user: silas
+ssh_public_key_url: https://github.com/silas.keys
+domain: backend.automatework.de
+admin_email: silas@automatework.de

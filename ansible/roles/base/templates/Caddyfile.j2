@@ -1,0 +1,6 @@
+{{ domain }} {
+  encode gzip
+  # Bis ein Docker-Service läuft, liefert Caddy einen 502 aus
+  reverse_proxy unix//var/run/docker.sock
+  tls {{ admin_email }}
+}

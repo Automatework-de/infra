@@ -1,0 +1,102 @@
+# ---------- User + SSH --------------------------------------------------
+- name: Ensure deploy user exists
+  user:
+    name: "{{ deploy_user }}"
+    groups: "sudo,docker"      # → Docker-Gruppe direkt hier
+    append: true
+    shell: /bin/bash
+    state: present
+
+- name: Install authorized SSH key
+  ansible.posix.authorized_key:
+    user: "{{ deploy_user }}"
+    key: "{{ lookup('url', ssh_public_key_url) }}"
+    state: present
+
+# ---------- Basis-Pakete ------------------------------------------------
+- name: Install base packages
+  apt:
+    name:
+      - ufw
+      - fail2ban
+      - curl
+      - gnupg
+      - ca-certificates
+      - lsb-release
+      - apt-transport-https
+    state: present
+    update_cache: yes
+
+# ---------- Docker CE + Compose ----------------------------------------
+- name: Add Docker GPG key
+  apt_key:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    state: present
+
+- name: Add Docker repository
+  apt_repository:
+    repo: "deb [arch={{ ansible_architecture }} signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] \
+      https://download.docker.com/linux/ubuntu {{ ansible_lsb.codename }} stable"
+    filename: docker
+    state: present
+
+- name: Install Docker and compose plugin
+  apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-compose-plugin
+    state: present
+    update_cache: yes
+
+# ---------- Firewall (UFW) ---------------------------------------------
+- name: Allow SSH / HTTP / HTTPS
+  community.general.ufw:
+    rule: allow
+    port: "{{ item }}"
+  loop: [22, 80, 443]
+
+- name: Enable firewall
+  community.general.ufw:
+    state: enabled
+    policy: deny
+
+# ---------- Fail2Ban ----------------------------------------------------
+- name: Deploy basic sshd jail
+  copy:
+    dest: /etc/fail2ban/jail.local
+    content: |
+      [sshd]
+      enabled = true
+      banaction = iptables-multiport
+      maxretry  = 3
+  notify: restart fail2ban
+
+# ---------- Caddy -------------------------------------------------------
+- name: Add Caddy key
+  apt_key:
+    url: https://dl.cloudsmith.io/public/caddy/stable/gpg.key
+    state: present
+
+- name: Add Caddy repo
+  apt_repository:
+    repo: "deb [signed-by=/usr/share/keyrings/caddy-stable.gpg] \
+      https://dl.cloudsmith.io/public/caddy/stable/deb/debian any-version main"
+    filename: caddy
+    state: present
+
+- name: Install Caddy
+  apt:
+    name: caddy
+    state: present
+    update_cache: yes
+
+- name: Deploy Caddyfile
+  template:
+    src: Caddyfile.j2
+    dest: /etc/caddy/Caddyfile
+    owner: root
+    group: root
+    mode: "0644"
+  notify: reload caddy
