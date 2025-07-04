@@ -1,0 +1,4 @@
+creation_rules:
+  - encrypted_regex: '^(MYSQL_|SEATABLE_|DB_)'
+    age:
+      - age1urpk4a7zmhvl5hr90y84mu9pu3w7pp0et49ge73kxgxkkerq3ynqnllrzs
